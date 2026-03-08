@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#00f5d4">
+  <title>PharmaScan Pro</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --b0: #050a14; --b1: #0a1628; --b2: #0f2038; --b3: #142a48; --b4: #1a3558;
+      --accent: #00f5d4; --accent-dim: #00c4a8; --accent-glow: rgba(0,245,212,0.3);
+      --text: #e8f4f8; --text-dim: #8aa4b8; --text-muted: #5a7088;
+      --success: #00e676; --warning: #ffab00; --danger: #ff5252; --info: #40c4ff;
+      --radius: 12px; --radius-sm: 8px;
+      --safe-top: env(safe-area-inset-top, 0); --safe-bottom: env(safe-area-inset-bottom, 0);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--b0); color: var(--text); min-height: 100vh; padding-top: var(--safe-top); }
+    
+    /* Header */
+    .header { background: linear-gradient(180deg, var(--b1), var(--b0)); padding: 16px; border-bottom: 1px solid var(--b3); position: sticky; top: 0; z-index: 100; }
+    .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--accent-dim)); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .logo-text { font-size: 18px; font-weight: 700; }
+    .logo-ver { font-size: 10px; color: var(--accent); background: var(--b3); padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-family: monospace; }
+    .header-btns { display: flex; gap: 8px; }
+    .header-btn { width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--b2); border: 1px solid var(--b3); color: var(--text-dim); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; }
+    .header-btn:active { background: var(--b3); color: var(--accent); }
+    .store-badge { display: flex; align-items: center; gap: 8px; background: var(--b2); border: 1px solid var(--b3); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12px; font-family: monospace; }
+    .store-badge .icon { color: var(--accent); }
+    .store-badge .no { color: var(--accent); font-weight: 600; }
+    .store-badge .name { color: var(--text-dim); }
+
+    /* Main */
+    .main { padding: 16px; padding-bottom: calc(80px + var(--safe-bottom)); }
+
+    /* Scanner Section */
+    .scanner-section { background: var(--b1); border: 1px solid var(--b3); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+    .section-title { font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .section-title::before { content: ''; width: 4px; height: 14px; background: var(--accent); border-radius: 2px; }
+    
+    /* Scanner Frame */
+    .scanner-frame { background: var(--b0); border: 2px dashed var(--b3); border-radius: var(--radius); height: 180px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; position: relative; overflow: hidden; }
+    .scanner-frame.active { border-color: var(--accent); }
+    .scanner-placeholder { text-align: center; color: var(--text-muted); }
+    .scanner-placeholder .icon { font-size: 40px; margin-bottom: 8px; opacity: 0.5; }
+    #reader { width: 100%; height: 100%; }
+    #reader video { object-fit: cover; border-radius: var(--radius); }
+    .viewfinder { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
+    .viewfinder.active { display: flex; }
+    .viewfinder-box { width: 240px; height: 120px; border: 2px solid var(--accent); border-radius: var(--radius-sm); box-shadow: 0 0 0 2000px rgba(0,0,0,0.5); }
+
+    /* Input */
+    .input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .input-row input { flex: 1; height: 48px; background: var(--b0); border: 2px solid var(--b3); border-radius: var(--radius); padding: 0 14px; font-size: 16px; color: var(--text); font-family: monospace; }
+    .input-row input:focus { outline: none; border-color: var(--accent); }
+    .input-row input::placeholder { color: var(--text-muted); }
+    
+    /* Buttons */
+    .btn { height: 48px; border-radius: var(--radius); border: none; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-dim)); color: var(--b0); }
+    .btn-primary:active { box-shadow: 0 0 20px var(--accent-glow); }
+    .btn-secondary { background: var(--b2); border: 2px solid var(--b3); color: var(--text); }
+    .btn-secondary:active { border-color: var(--accent); }
+    .btn-secondary.stop { background: var(--danger); border-color: var(--danger); color: #fff; }
+    .scan-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn-full { width: 100%; }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+    .stat { background: var(--b1); border: 1px solid var(--b3); border-radius: var(--radius); padding: 14px; text-align: center; }
+    .stat-val { font-size: 24px; font-weight: 700; color: var(--accent); font-family: monospace; }
+    .stat-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+    /* History */
+    .history-section { background: var(--b1); border: 1px solid var(--b3); border-radius: var(--radius); overflow: hidden; }
+    .history-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--b3); }
+    .history-actions { display: flex; gap: 8px; }
+    .history-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--b3); background: var(--b2); color: var(--text-dim); font-size: 11px; font-weight: 600; cursor: pointer; }
+    .history-btn:active { border-color: var(--accent); color: var(--accent); }
+    .history-list { max-height: 400px; overflow-y: auto; }
+    .history-empty { padding: 40px; text-align: center; color: var(--text-muted); }
+    .history-empty .icon { font-size: 40px; margin-bottom: 8px; opacity: 0.5; }
+    
+    /* History Item */
+    .history-item { padding: 14px 16px; border-bottom: 1px solid var(--b2); display: flex; align-items: center; gap: 12px; }
+    .history-item:active { background: var(--b2); }
+    .history-item.expired { border-left: 3px solid var(--danger); }
+    .history-item.expiring { border-left: 3px solid var(--warning); }
+    .history-item.ok { border-left: 3px solid var(--success); }
+    .item-icon { width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--b3); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .item-info { flex: 1; min-width: 0; }
+    .item-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: monospace; }
+    .item-badges { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+    .badge { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+    .badge-ok { background: rgba(0,230,118,0.2); color: var(--success); }
+    .badge-expiring { background: rgba(255,171,0,0.2); color: var(--warning); }
+    .badge-expired { background: rgba(255,82,82,0.2); color: var(--danger); }
+    .badge-qty { background: rgba(0,245,212,0.2); color: var(--accent); }
+    .badge-batch { background: rgba(64,196,255,0.2); color: var(--info); }
+    .qty-controls { display: flex; align-items: center; gap: 4px; }
+    .qty-btn { width: 28px; height: 28px; border-radius: 6px; border: none; background: var(--b3); color: var(--text); font-size: 16px; font-weight: 700; cursor: pointer; }
+    .qty-btn:active { background: var(--accent); color: var(--b0); }
+    .qty-val { min-width: 24px; text-align: center; font-weight: 700; font-family: monospace; }
+
+    /* Bottom Nav */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--b1); border-top: 1px solid var(--b3); display: flex; padding-bottom: var(--safe-bottom); z-index: 100; }
+    .nav-btn { flex: 1; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-muted); border: none; background: none; cursor: pointer; font-size: 10px; }
+    .nav-btn.active { color: var(--accent); }
+    .nav-btn .icon { font-size: 20px; }
+
+    /* Pages */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* Scan Result Widget */
+    .scan-result-widget { position: fixed; inset: 0; background: var(--b0); z-index: 1000; overflow-y: auto; transform: translateY(100%); transition: transform 0.3s; }
+    .scan-result-widget.show { transform: translateY(0); }
+    .srw-header { padding: 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--b3); }
+    .srw-header.found { background: linear-gradient(135deg, rgba(0,230,118,0.2), transparent); }
+    .srw-header.notfound { background: linear-gradient(135deg, rgba(255,171,0,0.2), transparent); }
+    .srw-icon { font-size: 28px; }
+    .srw-title { flex: 1; font-size: 16px; font-weight: 700; }
+    .srw-close { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--b3); color: var(--text); font-size: 18px; cursor: pointer; }
+    .srw-body { padding: 16px; }
+    .srw-product { background: linear-gradient(135deg, var(--b2), var(--b1)); border: 1px solid var(--b3); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+    .srw-name { font-size: 18px; font-weight: 700; margin-bottom: 8px; line-height: 1.3; }
+    .srw-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .srw-chip { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid; }
+    .srw-chip.brand { background: rgba(245,158,11,0.1); border-color: #F59E0B; color: #F59E0B; }
+    .srw-chip.supplier { background: rgba(59,130,246,0.1); border-color: #3B82F6; color: #3B82F6; }
+    .srw-chip.noreturn { background: rgba(220,38,38,0.1); border-color: #DC2626; color: #DC2626; }
+    .srw-codes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .srw-code { background: var(--b3); border-radius: var(--radius-sm); padding: 10px; text-align: center; }
+    .srw-code-label { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .srw-code-val { font-family: monospace; font-size: 11px; font-weight: 600; word-break: break-all; }
+    .srw-form { background: var(--b1); border: 1px solid var(--b3); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .form-group { margin-bottom: 12px; }
+    .form-label { display: block; font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .form-input { width: 100%; height: 44px; background: var(--b0); border: 2px solid var(--b3); border-radius: var(--radius-sm); padding: 0 12px; font-size: 15px; color: var(--text); }
+    .form-input:focus { outline: none; border-color: var(--accent); }
+    .form-input.mono { font-family: monospace; }
+    .form-input.readonly { background: var(--b2); color: var(--accent); }
+    .srw-qty { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px; background: var(--b2); border-radius: var(--radius); margin-bottom: 16px; }
+    .srw-qty-btn { width: 48px; height: 48px; border-radius: var(--radius); border: none; background: var(--b3); color: var(--text); font-size: 24px; font-weight: 700; cursor: pointer; }
+    .srw-qty-btn:active { background: var(--accent); color: var(--b0); }
+    .srw-qty-input { width: 80px; height: 48px; background: var(--b0); border: 2px solid var(--b3); border-radius: var(--radius); text-align: center; font-size: 24px; font-weight: 700; color: var(--accent); font-family: monospace; }
+    .srw-actions { display: flex; flex-direction: column; gap: 10px; }
+    .srw-actions .btn { height: 52px; font-size: 15px; }
+
+    /* Edit Modal */
+    .edit-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: flex-end; opacity: 0; visibility: hidden; transition: all 0.3s; }
+    .edit-modal.show { opacity: 1; visibility: visible; }
+    .edit-content { width: 100%; max-height: 90vh; background: var(--b1); border-radius: var(--radius) var(--radius) 0 0; overflow: hidden; transform: translateY(100%); transition: transform 0.3s; }
+    .edit-modal.show .edit-content { transform: translateY(0); }
+    .edit-header { padding: 16px; border-bottom: 1px solid var(--b3); display: flex; align-items: center; justify-content: space-between; font-weight: 700; font-size: 16px; }
+    .edit-close { width: 32px; height: 32px; border-radius: 50%; border: none; background: var(--b3); color: var(--text); font-size: 16px; cursor: pointer; }
+    .edit-body { padding: 16px; max-height: 70vh; overflow-y: auto; }
+    .edit-footer { padding: 16px; border-top: 1px solid var(--b3); display: flex; gap: 10px; }
+    .edit-footer .btn { flex: 1; }
+    .btn-danger { background: var(--danger); color: #fff; }
+
+    /* Settings */
+    .settings-section { background: var(--b1); border: 1px solid var(--b3); border-radius: var(--radius); margin-bottom: 16px; overflow: hidden; }
+    .settings-title { padding: 14px 16px; font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--b3); }
+    .settings-item { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--b2); }
+    .settings-item:last-child { border-bottom: none; }
+    .settings-item-label { font-size: 14px; }
+    .settings-item-val { font-family: monospace; font-size: 13px; color: var(--accent); }
+    .file-upload { padding: 24px; border: 2px dashed var(--b3); border-radius: var(--radius); text-align: center; cursor: pointer; margin: 16px; }
+    .file-upload:active { border-color: var(--accent); }
+    .file-upload .icon { font-size: 32px; margin-bottom: 8px; }
+    .file-upload-text { font-size: 13px; color: var(--text-dim); }
+
+    /* Side Menu */
+    .side-menu-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 900; opacity: 0; visibility: hidden; transition: all 0.3s; }
+    .side-menu-bg.show { opacity: 1; visibility: visible; }
+    .side-menu { position: fixed; top: 0; left: 0; bottom: 0; width: 280px; background: var(--b1); z-index: 901; transform: translateX(-100%); transition: transform 0.3s; padding-top: var(--safe-top); }
+    .side-menu.show { transform: translateX(0); }
+    .side-menu-header { padding: 20px; border-bottom: 1px solid var(--b3); }
+    .side-menu-item { padding: 16px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--b2); cursor: pointer; }
+    .side-menu-item:active { background: var(--b2); }
+    .side-menu-item .icon { font-size: 20px; width: 28px; }
+
+    /* Toast */
+    .toast-wrap { position: fixed; top: calc(var(--safe-top) + 16px); left: 16px; right: 16px; z-index: 2000; pointer-events: none; }
+    .toast { background: var(--b2); border: 1px solid var(--b3); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); opacity: 1; transition: opacity 0.3s; }
+    .toast.success { border-color: var(--success); }
+    .toast.error { border-color: var(--danger); }
+    .toast.warning { border-color: var(--warning); }
+    .toast-icon { font-size: 18px; }
+    .toast.success .toast-icon { color: var(--success); }
+    .toast.error .toast-icon { color: var(--danger); }
+    .toast.warning .toast-icon { color: var(--warning); }
+
+    /* Autocomplete */
+    .autocomplete { position: relative; }
+    .autocomplete-list { position: absolute; top: 100%; left: 0; right: 0; background: var(--b2); border: 1px solid var(--b3); border-radius: var(--radius-sm); margin-top: 4px; max-height: 180px; overflow-y: auto; z-index: 100; display: none; }
+    .autocomplete-list.show { display: block; }
+    .autocomplete-item { padding: 12px; cursor: pointer; border-bottom: 1px solid var(--b3); font-size: 13px; }
+    .autocomplete-item:active { background: var(--b3); }
+
+    /* Offline */
+    .offline-tag { position: fixed; top: calc(var(--safe-top) + 60px); right: 16px; background: var(--danger); color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; z-index: 200; display: none; }
+    .offline-tag.show { display: block; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-top">
+      <div class="logo">
+        <div class="logo-icon">📦</div>
+        <span class="logo-text">PharmaScan Pro</span>
+        <span class="logo-ver">v5.0</span>
+      </div>
+      <div class="header-btns">
+        <button class="header-btn" id="btnMenu">☰</button>
+      </div>
+    </div>
+    <div class="store-badge">
+      <span class="icon">🏪</span>
+      <span class="no" id="storeNo">31374</span>
+      <span class="name" id="storeName">T3 ARRIVAL</span>
+    </div>
+  </header>
+
+  <!-- Pages -->
+  <main class="main">
+    <!-- Home Page -->
+    <div class="page active" id="page-home">
+      <section class="scanner-section">
+        <div class="section-title">Scan Product</div>
+        <div class="scanner-frame" id="scannerFrame">
+          <div id="reader"></div>
+          <div class="scanner-placeholder" id="scannerPlaceholder">
+            <div class="icon">📷</div>
+            <div>Tap to start camera</div>
+          </div>
+          <div class="viewfinder" id="viewfinder">
+            <div class="viewfinder-box"></div>
+          </div>
+        </div>
+        <div class="input-row">
+          <input type="text" id="manualInput" placeholder="Enter GTIN / Barcode / RMS" inputmode="numeric">
+          <button class="btn btn-primary" id="btnManualAdd" style="width:60px;">➜</button>
+        </div>
+        <div class="scan-btns">
+          <button class="btn btn-secondary" id="btnScanner">
+            <span id="btnScannerText">Start Scanner</span>
+          </button>
+          <button class="btn btn-secondary" id="btnManualEntry">✏️ Manual</button>
+        </div>
+      </section>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-val" id="statMaster">0</div>
+          <div class="stat-label">Products</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="statScans">0</div>
+          <div class="stat-label">Scanned</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="statExpiring">0</div>
+          <div class="stat-label">Expiring</div>
+        </div>
+      </div>
+
+      <section class="history-section">
+        <div class="history-header">
+          <div class="section-title" style="margin:0;">Recent Scans</div>
+          <div class="history-actions">
+            <button class="history-btn" id="btnViewAll">View All</button>
+          </div>
+        </div>
+        <div class="history-list" id="recentList">
+          <div class="history-empty" id="emptyRecent">
+            <div class="icon">📋</div>
+            <div>No scans yet</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- History Page -->
+    <div class="page" id="page-history">
+      <div class="input-row" style="margin-bottom:16px;">
+        <input type="text" id="searchInput" placeholder="🔍 Search products...">
+      </div>
+      <section class="history-section">
+        <div class="history-header">
+          <div class="section-title" style="margin:0;">All Scans</div>
+          <div class="history-actions">
+            <button class="history-btn" id="btnExport">📤 Export</button>
+            <button class="history-btn" id="btnClearAll">🗑️ Clear</button>
+          </div>
+        </div>
+        <div class="history-list" id="historyList">
+          <div class="history-empty" id="emptyHistory">
+            <div class="icon">📋</div>
+            <div>No items</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Settings Page -->
+    <div class="page" id="page-settings">
+      <section class="settings-section">
+        <div class="settings-title">Store Information</div>
+        <div class="settings-item">
+          <span class="settings-item-label">Store No</span>
+          <span class="settings-item-val" id="settingsStoreNo">31374</span>
+        </div>
+        <div class="settings-item">
+          <span class="settings-item-label">Store Name</span>
+          <span class="settings-item-val" id="settingsStoreName">T3 ARRIVAL</span>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-title">Database</div>
+        <div class="settings-item">
+          <span class="settings-item-label">Products Loaded</span>
+          <span class="settings-item-val" id="settingsDbCount">0</span>
+        </div>
+        <div class="settings-item">
+          <span class="settings-item-label">Scanned Items</span>
+          <span class="settings-item-val" id="settingsScanCount">0</span>
+        </div>
+        <div class="file-upload" id="uploadArea">
+          <div class="icon">📁</div>
+          <div class="file-upload-text">Upload Master CSV</div>
+        </div>
+        <input type="file" id="masterFileInput" accept=".csv,.tsv,.txt" style="display:none;">
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-title">App Info</div>
+        <div class="settings-item">
+          <span class="settings-item-label">Version</span>
+          <span class="settings-item-val">5.0.0</span>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-page="home">
+      <span class="icon">🏠</span>
+      <span>Home</span>
+    </button>
+    <button class="nav-btn" data-page="history">
+      <span class="icon">📋</span>
+      <span>History</span>
+    </button>
+    <button class="nav-btn" data-page="settings">
+      <span class="icon">⚙️</span>
+      <span>Settings</span>
+    </button>
+  </nav>
+
+  <!-- Scan Result Widget -->
+  <div class="scan-result-widget" id="scanResultWidget"></div>
+
+  <!-- Edit Modal -->
+  <div class="edit-modal" id="editModal">
+    <div class="edit-content">
+      <div class="edit-header">
+        <span>✏️ Edit Item</span>
+        <button class="edit-close" id="btnCloseEdit">✕</button>
+      </div>
+      <div class="edit-body">
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <input type="text" class="form-input" id="editName">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">RMS Code</label>
+            <input type="text" class="form-input mono" id="editRms">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Alshaya Code</label>
+            <input type="text" class="form-input mono" id="editAlshaya">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Brand</label>
+            <input type="text" class="form-input" id="editBrand">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Supplier</label>
+            <input type="text" class="form-input" id="editSupplier">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Expiry (YYYY-MM-DD)</label>
+            <input type="date" class="form-input" id="editExpiry">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Batch</label>
+            <input type="text" class="form-input mono" id="editBatch">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantity</label>
+          <input type="number" class="form-input" id="editQty" min="1" value="1">
+        </div>
+      </div>
+      <div class="edit-footer">
+        <button class="btn btn-danger" id="btnDeleteEdit">🗑️ Delete</button>
+        <button class="btn btn-primary" id="btnSaveEdit">💾 Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Side Menu -->
+  <div class="side-menu-bg" id="sideMenuBg"></div>
+  <div class="side-menu" id="sideMenu">
+    <div class="side-menu-header">
+      <div style="font-size:18px;font-weight:700;">PharmaScan Pro</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">v5.0 • OASIS PHARMACY</div>
+    </div>
+    <div class="side-menu-item" id="menuExportCSV"><span class="icon">📊</span> Export CSV</div>
+    <div class="side-menu-item" id="menuExportTSV"><span class="icon">📑</span> Export TSV (Excel)</div>
+    <div class="side-menu-item" id="menuBackup"><span class="icon">💾</span> Backup Master Data</div>
+    <div class="side-menu-item" id="menuClearHistory"><span class="icon">🗑️</span> Clear History</div>
+    <div class="side-menu-item" id="menuClearMaster"><span class="icon">⚠️</span> Clear Master Data</div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <!-- Offline Tag -->
+  <div class="offline-tag" id="offlineTag">OFFLINE</div>
+
+  <script src="app.js"></script>
+</body>
+</html>
