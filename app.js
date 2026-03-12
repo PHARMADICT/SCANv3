@@ -5,7 +5,7 @@
  * 
  * Features:
  * - Triple lookup: GTIN (14-digit) / BARCODE (EAN-13/12) / RMS Code
- * - GS1 AI parsing (01, 17, 10, 21)
+ * - GS1 AI parsing (01, 17, 10, 21, 30)
  * - Instant scan result widget
  * - Master data management
  * - Export CSV/TSV
@@ -47,6 +47,7 @@ const GS1 = {
   VARIABLE_LENGTH_AIS: {
     '10': 20,
     '21': 20,
+    '30': 8,
     '240': 30,
     '241': 30,
     '250': 30,
@@ -66,7 +67,7 @@ const GS1 = {
     code = code.replace(/[\x1d\x1e\x1c~]/g, '\x1d').replace(/\[FNC1\]|<GS>|\{GS\}/gi, '\x1d');
     
     // Check if GS1
-    if (code.includes('\x1d') || /\(\d{2,4}\)/.test(code) || (/^(01|02|10|17|21)\d/.test(code) && code.length > 16)) {
+    if (code.includes('\x1d') || /\(\d{2,4}\)/.test(code) || (/^(01|02|10|17|21|30)\d/.test(code) && code.length > 16)) {
       r.isGS1 = true;
       this.parseGS1(code, r);
       if (!r.barcode && r.gtin13) r.barcode = r.gtin13;
@@ -93,6 +94,10 @@ const GS1 = {
       if ((t.ai === '17' || t.ai === '15') && !r.expiry) this.parseDate(t.value, r);
       if (t.ai === '10' && !r.batch) r.batch = t.value.slice(0, 20);
       if (t.ai === '21' && !r.serial) r.serial = t.value.slice(0, 20);
+      if (t.ai === '30') {
+        const qty = parseInt(t.value, 10);
+        if (Number.isFinite(qty) && qty > 0) r.qty = qty;
+      }
     }
   },
 
@@ -520,15 +525,16 @@ function showScanResult(parsed, product) {
         <div id="expiryPreview" style="font-size:12px;color:var(--success);margin-top:6px;text-align:center;display:none;"></div>
       </div>
       
-      <div style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:${parsed.isGS1 ? 'rgba(0,230,118,0.1)' : 'rgba(255,171,0,0.1)'};border-radius:8px;margin-bottom:12px;justify-content:center;">
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:${parsed.isGS1 ? 'rgba(0,230,118,0.1)' : 'rgba(255,171,0,0.1)'};border-radius:8px;margin-bottom:8px;justify-content:center;">
         <span>${parsed.isGS1 ? '✅' : '📝'}</span>
         <span style="font-size:12px;font-weight:600;color:${parsed.isGS1 ? 'var(--success)' : 'var(--warning)'};">${parsed.isGS1 ? 'GS1 Barcode Parsed' : 'Manual Entry'}</span>
       </div>
+      ${parsed.isGS1 ? `<div style="font-size:11px;color:var(--text-dim);text-align:center;margin-bottom:12px;line-height:1.5;">AIs: (01) GTIN • (17) Expiry Date (YYMMDD) • (10) Batch/Lot • (21) Serial • (30) Quantity</div>` : ''}
       
       <div class="srw-qty">
         <span style="font-weight:600;color:var(--text-dim);">QTY:</span>
         <button class="srw-qty-btn" onclick="adjustSrwQty(-1)">−</button>
-        <input type="number" class="srw-qty-input" id="srwQty" value="1" min="1">
+        <input type="number" class="srw-qty-input" id="srwQty" value="${parsed.qty || 1}" min="1">
         <button class="srw-qty-btn" onclick="adjustSrwQty(1)">+</button>
       </div>
       
