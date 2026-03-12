@@ -32,7 +32,9 @@ const App = {
   scanner: { active: false, instance: null },
   scans: [],
   editingId: null,
-  search: ''
+  search: '',
+  manualQueue: [],
+  manualQueueActive: false
 };
 
 // ============================================
@@ -429,8 +431,31 @@ function processManualEntries() {
   const raw = document.getElementById('manualInput').value || '';
   const entries = raw.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
   if (!entries.length) return;
-  processBarcode(entries[0]);
-  if (entries.length > 1) toast(`Loaded first code of ${entries.length}. Scan next codes one by one.`, 'info');
+
+  App.manualQueue = entries;
+  App.manualQueueActive = true;
+  processNextManualQueue();
+}
+
+function processNextManualQueue() {
+  if (!App.manualQueue.length) {
+    if (App.manualQueueActive) {
+      toast('✅ All pasted codes processed', 'success');
+    }
+    App.manualQueueActive = false;
+    return;
+  }
+
+  const nextCode = App.manualQueue.shift();
+  const remaining = App.manualQueue.length;
+  const input = document.getElementById('manualInput');
+  input.value = App.manualQueue.join('\n');
+
+  processBarcode(nextCode);
+
+  if (remaining > 0) {
+    toast(`Loaded next code. ${remaining} remaining.`, 'info');
+  }
 }
 
 // ============================================
@@ -495,11 +520,11 @@ function showScanResult(parsed, product) {
       </div>
       
       <div class="srw-codes">
-        <div class="srw-code">
+        <div class="srw-code" data-code="${escapeHtml(product?.gtin || parsed.gtin || '')}" onclick="scanByCodeFromEvent(this)" title="Tap to fetch by GTIN">
           <div class="srw-code-label">GTIN</div>
           <div class="srw-code-val">${product?.gtin || parsed.gtin || '-'}</div>
         </div>
-        <div class="srw-code">
+        <div class="srw-code" data-code="${escapeHtml(product?.barcode || parsed.barcode || barcodeDisplay)}" onclick="scanByCodeFromEvent(this)" title="Tap to fetch by BARCODE">
           <div class="srw-code-label">BARCODE</div>
           <div class="srw-code-val">${product?.barcode || parsed.barcode || barcodeDisplay}</div>
         </div>
@@ -542,10 +567,10 @@ function showScanResult(parsed, product) {
         ${!found ? `
         <button class="btn btn-primary btn-full" onclick="saveAsNewProduct()">➕ ADD TO MASTER & SAVE</button>
         <button class="btn btn-secondary btn-full" onclick="saveScanWithoutMaster()">⏭️ SAVE ONLY (SKIP MASTER)</button>
-        <button class="btn btn-secondary btn-full" onclick="scanAnotherProduct()">📷 SCAN OTHER BARCODE</button>
         ` : `
         <button class="btn btn-primary btn-full" onclick="saveScanResult()">💾 SAVE TO HISTORY</button>
         `}
+        <button class="btn btn-secondary btn-full" onclick="scanAnotherProduct()">📷 CAPTURE / SCAN NEXT</button>
         <button class="btn btn-secondary btn-full" onclick="hideScanResult()">✕ Cancel</button>
       </div>
     </div>
@@ -616,6 +641,16 @@ function hideScanResult() {
   document.getElementById('scanResultWidget').classList.remove('show');
 }
 
+function scanByCode(code) {
+  const clean = String(code || '').trim();
+  if (!clean || clean === '-') return;
+  processBarcode(clean);
+}
+
+function scanByCodeFromEvent(el) {
+  scanByCode(el?.dataset?.code || '');
+}
+
 async function saveAsNewProduct() {
   const widget = document.getElementById('scanResultWidget');
   const parsed = JSON.parse(widget.dataset.parsed);
@@ -662,6 +697,7 @@ async function saveAsNewProduct() {
   hideScanResult();
   haptic('success');
   toast('✅ Product added!', 'success');
+  processNextManualQueue();
 }
 
 
@@ -694,6 +730,7 @@ async function saveScanWithoutMaster() {
   hideScanResult();
   haptic('success');
   toast('Saved without adding to master', 'success');
+  processNextManualQueue();
 }
 
 function scanAnotherProduct() {
@@ -735,6 +772,7 @@ async function saveScanResult() {
   hideScanResult();
   haptic('success');
   toast(`Saved: ${scan.name}`, 'success');
+  processNextManualQueue();
 }
 
 // ============================================
@@ -1080,6 +1118,7 @@ function setupEvents() {
   
   // Scanner
   document.getElementById('btnScanner').onclick = () => Scanner.toggle();
+  document.getElementById('btnCapture').onclick = () => Scanner.start();
   document.getElementById('scannerFrame').onclick = () => { if (!App.scanner.active) Scanner.start(); };
   
   // Manual input
