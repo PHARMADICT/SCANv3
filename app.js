@@ -39,6 +39,20 @@ const App = {
 // GS1 PARSER
 // ============================================
 const GS1 = {
+  FIXED_LENGTH_AIS: {
+    '00': 18, '01': 14, '02': 14,
+    '11': 6, '12': 6, '13': 6, '15': 6, '16': 6, '17': 6,
+    '20': 2
+  },
+  VARIABLE_LENGTH_AIS: {
+    '10': 20,
+    '21': 20,
+    '240': 30,
+    '241': 30,
+    '250': 30,
+    '251': 30
+  },
+
   parse(code) {
     const r = { raw: code || '', gtin: '', gtin13: '', barcode: '', expiry: '', expiryISO: '', expiryDisplay: '', batch: '', serial: '', qty: 1, isGS1: false };
     if (!code) return r;
@@ -55,6 +69,7 @@ const GS1 = {
     if (code.includes('\x1d') || /\(\d{2,4}\)/.test(code) || (/^(01|02|10|17|21)\d/.test(code) && code.length > 16)) {
       r.isGS1 = true;
       this.parseGS1(code, r);
+      if (!r.barcode && r.gtin13) r.barcode = r.gtin13;
     } else {
       // Simple barcode
       const digits = code.replace(/\D/g, '');
@@ -68,42 +83,61 @@ const GS1 = {
   },
 
   parseGS1(code, r) {
-    // Parentheses format
-    if (code.includes('(')) {
-      let m = code.match(/\(01\)(\d{14})/); if (m) { r.gtin = m[1]; r.gtin13 = m[1].slice(-13); }
-      m = code.match(/\(17\)(\d{6})/) || code.match(/\(15\)(\d{6})/); if (m) this.parseDate(m[1], r);
-      m = code.match(/\(10\)([^\(]+)/); if (m) r.batch = m[1].trim().slice(0, 20);
-      m = code.match(/\(21\)([^\(]+)/); if (m) r.serial = m[1].trim().slice(0, 20);
-      return;
-    }
-    
-    // Raw AI format
-    let pos = 0, len = code.length;
-    while (pos < len) {
-      if (code[pos] === '\x1d') { pos++; continue; }
-      const ai = code.slice(pos, pos + 2);
-      
-      if (ai === '01' || ai === '02') {
-        r.gtin = code.slice(pos + 2, pos + 16);
-        r.gtin13 = r.gtin.slice(-13);
-        pos += 16;
-      } else if (ai === '17' || ai === '15') {
-        this.parseDate(code.slice(pos + 2, pos + 8), r);
-        pos += 8;
-      } else if (ai === '10') {
-        pos += 2;
-        let batch = '';
-        while (pos < len && code[pos] !== '\x1d') batch += code[pos++];
-        r.batch = batch.slice(0, 20);
-      } else if (ai === '21') {
-        pos += 2;
-        while (pos < len && code[pos] !== '\x1d') pos++;
-      } else if (ai === '11' || ai === '12' || ai === '13') {
-        pos += 8;
-      } else {
-        pos++;
+    const normalized = this.normalizeGS1Input(code);
+    const tokens = this.tokenizeGS1(normalized);
+    for (const t of tokens) {
+      if (t.ai === '01' || t.ai === '02') {
+        r.gtin = t.value;
+        r.gtin13 = t.value.slice(-13);
       }
+      if ((t.ai === '17' || t.ai === '15') && !r.expiry) this.parseDate(t.value, r);
+      if (t.ai === '10' && !r.batch) r.batch = t.value.slice(0, 20);
+      if (t.ai === '21' && !r.serial) r.serial = t.value.slice(0, 20);
     }
+  },
+
+  normalizeGS1Input(code) {
+    if (!code.includes('(')) return code;
+    return code.replace(/\((\d{2,4})\)([^\(]*)/g, (_, ai, value) => `${ai}${value}\x1d`).replace(/\x1d+$/g, '');
+  },
+
+  tokenizeGS1(code) {
+    const tokens = [];
+    let pos = 0;
+    while (pos < code.length) {
+      if (code[pos] === '\x1d') { pos++; continue; }
+      const ai = this.readAI(code, pos);
+      if (!ai) { pos++; continue; }
+      pos += ai.length;
+      let value = '';
+
+      if (this.FIXED_LENGTH_AIS[ai]) {
+        const valueLen = this.FIXED_LENGTH_AIS[ai];
+        value = code.slice(pos, pos + valueLen);
+        pos += valueLen;
+      } else {
+        const max = this.VARIABLE_LENGTH_AIS[ai] || 30;
+        const start = pos;
+        while (pos < code.length && code[pos] !== '\x1d' && (pos - start) < max) {
+          if (this.readAI(code, pos) && (pos - start) > 0) break;
+          pos++;
+        }
+        value = code.slice(start, pos);
+      }
+
+      if (value) tokens.push({ ai, value });
+    }
+    return tokens;
+  },
+
+  readAI(code, pos) {
+    const four = code.slice(pos, pos + 4);
+    if (this.VARIABLE_LENGTH_AIS[four]) return four;
+    const three = code.slice(pos, pos + 3);
+    if (this.VARIABLE_LENGTH_AIS[three] || this.FIXED_LENGTH_AIS[three]) return three;
+    const two = code.slice(pos, pos + 2);
+    if (this.VARIABLE_LENGTH_AIS[two] || this.FIXED_LENGTH_AIS[two]) return two;
+    return '';
   },
 
   parseDate(yymmdd, r) {
@@ -385,6 +419,15 @@ function processBarcode(code) {
   document.getElementById('manualInput').value = '';
 }
 
+
+function processManualEntries() {
+  const raw = document.getElementById('manualInput').value || '';
+  const entries = raw.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
+  if (!entries.length) return;
+  processBarcode(entries[0]);
+  if (entries.length > 1) toast(`Loaded first code of ${entries.length}. Scan next codes one by one.`, 'info');
+}
+
 // ============================================
 // SCAN RESULT WIDGET
 // ============================================
@@ -408,7 +451,7 @@ function showScanResult(parsed, product) {
   widget.innerHTML = `
     <div class="srw-header ${found ? 'found' : 'notfound'}">
       <span class="srw-icon">${found ? '✅' : '⚠️'}</span>
-      <span class="srw-title">${found ? 'PRODUCT FOUND' : 'NEW PRODUCT'}</span>
+      <span class="srw-title">${found ? 'PRODUCT FOUND' : 'PRODUCT NOT IN MASTER'}</span>
       <button class="srw-close" onclick="hideScanResult()">✕</button>
     </div>
     <div class="srw-body">
@@ -479,7 +522,7 @@ function showScanResult(parsed, product) {
       
       <div style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:${parsed.isGS1 ? 'rgba(0,230,118,0.1)' : 'rgba(255,171,0,0.1)'};border-radius:8px;margin-bottom:12px;justify-content:center;">
         <span>${parsed.isGS1 ? '✅' : '📝'}</span>
-        <span style="font-size:12px;font-weight:600;color:${parsed.isGS1 ? 'var(--success)' : 'var(--warning)'};">${parsed.isGS1 ? 'GS1 Barcode' : 'Manual Entry'}</span>
+        <span style="font-size:12px;font-weight:600;color:${parsed.isGS1 ? 'var(--success)' : 'var(--warning)'};">${parsed.isGS1 ? 'GS1 Barcode Parsed' : 'Manual Entry'}</span>
       </div>
       
       <div class="srw-qty">
@@ -492,6 +535,8 @@ function showScanResult(parsed, product) {
       <div class="srw-actions">
         ${!found ? `
         <button class="btn btn-primary btn-full" onclick="saveAsNewProduct()">➕ ADD TO MASTER & SAVE</button>
+        <button class="btn btn-secondary btn-full" onclick="saveScanWithoutMaster()">⏭️ SAVE ONLY (SKIP MASTER)</button>
+        <button class="btn btn-secondary btn-full" onclick="scanAnotherProduct()">📷 SCAN OTHER BARCODE</button>
         ` : `
         <button class="btn btn-primary btn-full" onclick="saveScanResult()">💾 SAVE TO HISTORY</button>
         `}
@@ -613,6 +658,43 @@ async function saveAsNewProduct() {
   toast('✅ Product added!', 'success');
 }
 
+
+async function saveScanWithoutMaster() {
+  const widget = document.getElementById('scanResultWidget');
+  const parsed = JSON.parse(widget.dataset.parsed);
+
+  const expiry = document.getElementById('srwExpiry')?.value || '';
+  const batch = document.getElementById('srwBatch')?.value.trim() || '';
+  const qty = parseInt(document.getElementById('srwQty')?.value) || 1;
+
+  const scan = {
+    gtin: parsed.gtin || '',
+    barcode: parsed.barcode || parsed.gtin13 || '',
+    rms: document.getElementById('srwRms')?.value.trim() || '',
+    name: document.getElementById('srwName')?.value.trim() || 'Unknown Product',
+    brand: document.getElementById('srwBrand')?.value.trim() || '',
+    supplier: document.getElementById('srwSupplier')?.value.trim() || '',
+    returnPolicy: '',
+    expiryISO: expiry,
+    expiryDisplay: expiry ? GS1.formatDisplay(expiry) : '',
+    batch: batch,
+    qty: qty,
+    isGS1: parsed.isGS1,
+    matchType: 'UNMATCHED'
+  };
+
+  await DB.addScan(scan);
+  await refreshUI();
+  hideScanResult();
+  haptic('success');
+  toast('Saved without adding to master', 'success');
+}
+
+function scanAnotherProduct() {
+  hideScanResult();
+  Scanner.start();
+}
+
 async function saveScanResult() {
   const widget = document.getElementById('scanResultWidget');
   const parsed = JSON.parse(widget.dataset.parsed);
@@ -694,42 +776,45 @@ function filterScans(scans) {
 function renderHistory(containerId, items, emptyId) {
   const container = document.getElementById(containerId);
   const empty = document.getElementById(emptyId);
-  
+
   if (!items.length) {
     container.innerHTML = '';
     if (empty) { container.appendChild(empty); empty.classList.remove('hidden'); }
     return;
   }
-  
+
   if (empty) empty.classList.add('hidden');
-  
-  container.innerHTML = items.map(item => {
-    const status = GS1.getStatus(item.expiryISO);
-    const days = GS1.getDays(item.expiryISO);
-    
-    let badge = '<span class="badge badge-ok">✓</span>';
-    if (status === 'expired') badge = '<span class="badge badge-expired">EXP</span>';
-    else if (status === 'expiring') badge = `<span class="badge badge-expiring">${days}d</span>`;
-    
+
+  const header = `
+    <div class="history-grid-header">
+      <div class="history-grid-cell">RMS</div>
+      <div class="history-grid-cell">GTIN</div>
+      <div class="history-grid-cell">BARCODE</div>
+      <div class="history-grid-cell">DESCRIPTION</div>
+      <div class="history-grid-cell">EXPIRY</div>
+      <div class="history-grid-cell">BATCH</div>
+      <div class="history-grid-cell">SUPPLIER</div>
+      <div class="history-grid-cell">RETURNABLE OR NOT</div>
+    </div>
+  `;
+
+  const rows = items.map(item => {
+    const returnable = item.returnPolicy && item.returnPolicy.toUpperCase().includes('NO RETURN') ? 'NO' : 'YES';
     return `
-      <div class="history-item ${status}" onclick="editItem(${item.id})">
-        <div class="item-icon">${item.isGS1 ? '📊' : '📦'}</div>
-        <div class="item-info">
-          <div class="item-name">${escapeHtml(item.name)}</div>
-          <div class="item-meta">${item.expiryDisplay || '-'} • ${item.batch || '-'}</div>
-          <div class="item-badges">
-            ${item.brand ? `<span class="badge" style="background:rgba(245,158,11,0.2);color:#F59E0B;">${escapeHtml(item.brand)}</span>` : ''}
-          </div>
-        </div>
-        ${badge}
-        <div class="qty-controls" onclick="event.stopPropagation()">
-          <button class="qty-btn" onclick="adjustQty(${item.id},-1)">−</button>
-          <span class="qty-val">${item.qty || 1}</span>
-          <button class="qty-btn" onclick="adjustQty(${item.id},1)">+</button>
-        </div>
+      <div class="history-grid-row" onclick="editItem(${item.id})" title="Tap to edit">
+        <div class="history-grid-cell">${escapeHtml(item.rms || '-')}</div>
+        <div class="history-grid-cell">${escapeHtml(item.gtin || '-')}</div>
+        <div class="history-grid-cell">${escapeHtml(item.barcode || '-')}</div>
+        <div class="history-grid-cell description">${escapeHtml(item.name || '-')}</div>
+        <div class="history-grid-cell">${escapeHtml(item.expiryDisplay || '-')}</div>
+        <div class="history-grid-cell">${escapeHtml(item.batch || '-')}</div>
+        <div class="history-grid-cell">${escapeHtml(item.supplier || '-')}</div>
+        <div class="history-grid-cell">${escapeHtml(returnable)}</div>
       </div>
     `;
   }).join('');
+
+  container.innerHTML = header + rows;
 }
 
 async function adjustQty(id, delta) {
@@ -992,8 +1077,8 @@ function setupEvents() {
   document.getElementById('scannerFrame').onclick = () => { if (!App.scanner.active) Scanner.start(); };
   
   // Manual input
-  document.getElementById('manualInput').onkeypress = e => { if (e.key === 'Enter') processBarcode(document.getElementById('manualInput').value); };
-  document.getElementById('btnManualAdd').onclick = () => processBarcode(document.getElementById('manualInput').value);
+  document.getElementById('manualInput').onkeypress = e => { if (e.key === 'Enter') processManualEntries(); };
+  document.getElementById('btnManualAdd').onclick = processManualEntries;
   document.getElementById('btnManualEntry').onclick = () => document.getElementById('manualInput').focus();
   
   // History
