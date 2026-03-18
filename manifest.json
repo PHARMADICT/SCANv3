@@ -1,26 +1,25 @@
 {
-  "name": "PharmaScan Pro",
-  "short_name": "PharmaScan",
-  "description": "GS1 Barcode Scanner for Pharmacy Inventory - OASIS PHARMACY",
-  "version": "5.0.0",
+  "name": "Tracker Made Easy",
+  "short_name": "Tracker",
+  "description": "Pharmacy shift management and sales analytics tracker for Boots Pharmacy Dubai Airport Terminal 3.",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#050a14",
-  "theme_color": "#00f5d4",
+  "background_color": "#F5F2ED",
+  "theme_color": "#1A6B5A",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%2300f5d4' width='192' height='192' rx='32'/><text x='96' y='130' font-size='100' text-anchor='middle' fill='%23050a14'>📦</text></svg>",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%231A6B5A' width='192' height='192' rx='36'/><text x='96' y='120' font-size='90' text-anchor='middle' fill='%23FFFFFF'>💊</text></svg>",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%2300f5d4' width='512' height='512' rx='64'/><text x='256' y='350' font-size='280' text-anchor='middle' fill='%23050a14'>📦</text></svg>",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%23143D35' width='512' height='512' rx='96'/><text x='256' y='330' font-size='250' text-anchor='middle' fill='%23FFFFFF'>💊</text></svg>",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ],
-  "categories": ["business", "productivity", "utilities"]
+  "categories": ["productivity", "business"]
 }
